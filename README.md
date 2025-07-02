@@ -4,7 +4,7 @@ A modern, web-based interface for connecting to and configuring Betaflight fligh
 
 It allows you to manage multiple quadcopter profiles, automatically sync and parse key configuration details, and interact with the Betaflight Command Line Interface (CLI) in a polished, "Matrix-themed" environment.
 
-![Screenshot of the Betaflight Web Configurator](/)
+![Screenshot of the Betaflight Web Configurator](/webapp-screenshot.png)
 
 ## Features
 

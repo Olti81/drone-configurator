@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Betaflight Web Configurator (Local)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --matrix-black: #000000;
+            --matrix-dark: #0D0D0D;
+            --matrix-green: #00FF00;
+            --matrix-green-dark: #008F00;
+            --matrix-green-dim: #005F00;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--matrix-black);
+            color: var(--matrix-green);
+        }
+
+        h1, h2, h3 {
+            color: var(--matrix-green);
+            text-shadow: 0 0 7px rgba(0, 255, 0, 0.7);
+        }
+
+        .card {
+            @apply bg-matrix-dark bg-opacity-70 border border-matrix-green-dim rounded-lg shadow-lg p-6;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.15), inset 0 0 10px rgba(0, 255, 0, 0.1);
+        }
+
+        .btn {
+            @apply inline-block px-4 py-2 text-sm font-bold text-black bg-matrix-green rounded-md shadow-lg transition-all duration-200;
+            @apply hover:shadow-matrix-green/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-matrix-green focus:ring-offset-matrix-black;
+            text-shadow: none;
+        }
+
+        .btn-secondary {
+            @apply bg-transparent border border-matrix-green-dim text-matrix-green;
+            @apply hover:bg-matrix-green-dim hover:text-white;
+        }
+        
+        .btn-danger {
+            @apply bg-red-900 bg-opacity-50 border border-red-700 text-red-300;
+            @apply hover:bg-red-700 hover:text-white focus:ring-red-500;
+        }
+        
+        .btn-active-config {
+            @apply bg-matrix-green-dark border-matrix-green-dim text-white;
+        }
+
+        .input-field {
+            @apply block w-full px-3 py-2 bg-black bg-opacity-70 border border-matrix-green-dim rounded-md shadow-sm placeholder-matrix-green-dim text-matrix-green;
+            @apply focus:outline-none focus:ring-1 focus:ring-matrix-green focus:border-matrix-green sm:text-sm;
+        }
+
+        #cli-output, #saved-config-output {
+            height: 400px;
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: rgba(0, 15, 0, 0.25);
+            border: 1px solid var(--matrix-green-dim);
+            border-radius: 0.375rem;
+            padding: 1rem;
+        }
+        
+        #saved-config-output {
+            height: 16rem; /* h-64 */
+        }
+
+        .text-green-400 { color: var(--matrix-green); } /* Command color in CLI */
+        .text-yellow-400 { color: #FFFF00; text-shadow: 0 0 5px #ffff0050; } /* Confirmation color */
+        .text-white, .text-gray-400, .text-gray-500, .font-medium { color: var(--matrix-green); } /* Corrected: Removed .text-gray-400, .text-gray-500, .font-medium from this line as they are handled by specific classes or are not meant to be matrix-green */
+
+        .modal {
+            @apply fixed inset-0 bg-black bg-opacity-80 backdrop-blur-md flex items-center justify-center z-50;
+        }
+
+        .modal-content {
+            @apply bg-matrix-dark border border-matrix-green rounded-lg shadow-xl p-6 w-full max-w-md;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.4);
+        }
+        
+        /* Profile list selection */
+        .border-indigo-500 { border-color: var(--matrix-green) !important; }
+        .bg-gray-700 { background-color: var(--matrix-green-dark); }
+        .hover\:bg-gray-700:hover { background-color: var(--matrix-green-dim); }
+
+        /* File input button */
+        .file\:bg-indigo-50 { background-color: var(--matrix-green-dim); }
+        .file\:text-indigo-700 { color: var(--matrix-black); }
+        .hover\:file\:bg-indigo-100:hover { background-color: var(--matrix-green); }
+        
+        .border-matrix-green-dim { border-color: var(--matrix-green-dim); }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="app" class="max-w-7xl mx-auto">
+        <header class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold">Betaflight Web Configurator</h1>
+            <div>
+                <span id="user-id-display" class="text-xs mr-4"></span>
+                <button id="connect-button" class="btn">
+                    <i class="fas fa-plug mr-2"></i>Connect
+                </button>
+            </div>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column: Profiles and Details -->
+            <div class="lg:col-span-1 space-y-8">
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">Quadcopter Profiles</h2>
+                    <div id="profiles-list" class="space-y-2 mb-4">
+                        <!-- Profiles will be dynamically added here -->
+                    </div>
+                    <button id="add-profile-btn" class="btn w-full"><i class="fas fa-plus mr-2"></i>Add New Profile</button>
+                </div>
+
+                <div id="profile-details-card" class="card hidden">
+                    <h2 class="text-xl font-semibold mb-4" id="profile-name-display"></h2>
+                    <img id="profile-image-display" src="https://placehold.co/400x300/1a202c/e2e8f0?text=No+Image" alt="Quadcopter Image" class="w-full h-48 object-cover rounded-md mb-4">
+                    <p id="profile-description-display" class="mb-4"></p>
+                    
+                    <div id="fc-details-section" class="space-y-2 text-sm mb-4 border-t pt-4">
+                        <h3 class="text-lg font-semibold mb-2">Flight Controller Details</h3>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+                            <span>Firmware:</span>
+                            <span id="firmware-version-display">N/A</span>
+                            
+                            <span>Board:</span>
+                            <span id="board-name-display">N/A</span>
+
+                            <span>Manufacturer:</span>
+                            <span id="manufacturer-display">N/A</span>
+
+                            <span>MCU:</span>
+                            <span id="mcu-display">N/A</span>
+
+                            <span>Craft Name:</span>
+                            <span id="craft-name-display">N/A</span>
+                            
+                            <span>ESC Protocol:</span>
+                            <span id="esc-protocol-display">N/A</span>
+                        </div>
+                    </div>
+
+                    <div class="flex space-x-2">
+                        <button id="edit-profile-btn" class="btn btn-secondary flex-grow"><i class="fas fa-edit mr-2"></i>Edit</button>
+                        <button id="delete-profile-btn" class="btn btn-danger flex-grow"><i class="fas fa-trash mr-2"></i>Delete</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: CLI and Config -->
+            <div class="lg:col-span-2 space-y-8">
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">CLI Interface</h2>
+                    <pre id="cli-output" class="overflow-y-auto text-sm mb-4"></pre>
+                    <div class="flex flex-wrap gap-2">
+                        <button data-command="version" class="btn btn-secondary"><i class="fas fa-info-circle mr-2"></i>Version</button>
+                        <button data-command="dump all" class="btn btn-secondary"><i class="fas fa-file-alt mr-2"></i>Dump All</button>
+                        <button data-command="diff all" class="btn btn-secondary"><i class="fas fa-exchange-alt mr-2"></i>Diff All</button>
+                        <button id="sync-from-fc-btn" class="btn"><i class="fas fa-sync mr-2"></i>Sync from FC</button>
+                    </div>
+                     <div class="mt-4 flex">
+                        <input type="text" id="cli-input" class="input-field flex-grow" placeholder="Enter CLI command...">
+                        <button id="send-cli-command" class="btn ml-2">Send</button>
+                    </div>
+                </div>
+
+                <div id="profile-config-card" class="card hidden">
+                     <h2 class="text-xl font-semibold mb-4">Saved Configuration</h2>
+                     <div class="flex space-x-2 mb-4">
+                        <button data-config-type="version" class="btn btn-secondary config-view-btn">Version</button>
+                        <button data-config-type="dump" class="btn btn-secondary config-view-btn">Dump</button>
+                        <button data-config-type="diff" class="btn btn-secondary config-view-btn">Diff</button>
+                    </div>
+                    <pre id="saved-config-output" class="overflow-y-auto text-sm"></pre>
+                    <button id="flash-to-fc-btn" class="btn mt-4 w-full"><i class="fas fa-bolt mr-2"></i>Flash to FC (Coming Soon)</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit Profile Modal -->
+    <div id="profile-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-lg font-medium leading-6 mb-4">Add New Profile</h3>
+            <form id="profile-form">
+                <input type="hidden" id="profile-id">
+                <div class="space-y-4">
+                    <div>
+                        <label for="quad-name" class="block text-sm">Quadcopter Name</label>
+                        <input type="text" id="quad-name" class="input-field mt-1" required>
+                    </div>
+                    <div>
+                        <label for="quad-description" class="block text-sm">Description</label>
+                        <textarea id="quad-description" rows="3" class="input-field mt-1"></textarea>
+                    </div>
+                    <div>
+                        <label for="quad-image" class="block text-sm">Image</label>
+                        <input type="file" id="quad-image" accept="image/*" class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" id="cancel-modal-btn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn">Save Profile</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, collection, addDoc, getDocs, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase and App State ---
+        let db, auth, userId;
+        let port, reader, writer;
+        let keepReading = false;
+        let connected = false;
+        let profiles = [];
+        let selectedProfileId = null;
+        let currentCliOutput = "";
+        
+        // --- Command Queue for Syncing ---
+        let commandQueue = [];
+        let isSyncing = false;
+        let currentSyncCommand = null;
+        let syncOutputBuffer = {};
+
+
+        // Use a static app ID for local development
+        const appId = 'drone-config-local'; 
+
+        // User-provided Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAWRyipkzQPfHx9vZUeUxUvzlpCs6fK8os",
+            authDomain: "drone-configurator-40e6b.firebaseapp.com",
+            projectId: "drone-configurator-40e6b",
+            storageBucket: "drone-configurator-40e6b.appspot.com",
+            messagingSenderId: "734676451897",
+            appId: "1:734676451897:web:e79a144e1e1ec5f30dc3e8"
+        };
+
+        // --- UI Elements ---
+        const connectButton = document.getElementById('connect-button');
+        const cliOutputEl = document.getElementById('cli-output');
+        const cliInputEl = document.getElementById('cli-input');
+        const sendCliBtn = document.getElementById('send-cli-command');
+        const profilesListEl = document.getElementById('profiles-list');
+        const addProfileBtn = document.getElementById('add-profile-btn');
+        const profileModal = document.getElementById('profile-modal');
+        const profileForm = document.getElementById('profile-form');
+        const cancelModalBtn = document.getElementById('cancel-modal-btn');
+        const modalTitle = document.getElementById('modal-title');
+        const profileIdInput = document.getElementById('profile-id');
+        const quadNameInput = document.getElementById('quad-name');
+        const quadDescriptionInput = document.getElementById('quad-description');
+        const quadImageInput = document.getElementById('quad-image');
+        const profileDetailsCard = document.getElementById('profile-details-card');
+        const profileNameDisplay = document.getElementById('profile-name-display');
+        const profileImageDisplay = document.getElementById('profile-image-display');
+        const profileDescriptionDisplay = document.getElementById('profile-description-display');
+        const editProfileBtn = document.getElementById('edit-profile-btn');
+        const deleteProfileBtn = document.getElementById('delete-profile-btn');
+        const profileConfigCard = document.getElementById('profile-config-card');
+        const savedConfigOutputEl = document.getElementById('saved-config-output');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const syncFromFcBtn = document.getElementById('sync-from-fc-btn');
+        const firmwareVersionDisplay = document.getElementById('firmware-version-display');
+        const boardNameDisplay = document.getElementById('board-name-display');
+        const manufacturerDisplay = document.getElementById('manufacturer-display');
+        const mcuDisplay = document.getElementById('mcu-display');
+        const craftNameDisplay = document.getElementById('craft-name-display');
+        const escProtocolDisplay = document.getElementById('esc-protocol-display');
+
+        // --- Serial Communication (Robust Implementation) ---
+        async function connectSerial() {
+            if (!('serial' in navigator)) {
+                alert('Web Serial API not supported. Please use Chrome or Edge.');
+                return;
+            }
+            if (connected) {
+                await disconnectSerial();
+                return;
+            }
+
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+
+                appendToCli('Toggling DTR and RTS to reset flight controller...');
+                await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+                await new Promise(resolve => setTimeout(resolve, 100));
+                await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                connected = true;
+                keepReading = true;
+                updateConnectButton();
+                appendToCli(`Serial port connected.`);
+
+                listenToPort();
+
+                const textEncoder = new TextEncoder();
+                writer = port.writable.getWriter();
+
+                setTimeout(async () => {
+                    if (writer) {
+                        appendToCli('> # (entering CLI)', false, true);
+                        await writer.write(textEncoder.encode("#\r"));
+                    }
+                }, 1000);
+
+            } catch (error) {
+                console.error('Error connecting to serial port:', error);
+                appendToCli(`Error: ${error.message}`);
+                await disconnectSerial();
+            }
+        }
+
+        async function disconnectSerial() {
+            keepReading = false;
+            
+            if (reader) {
+                try {
+                    await reader.cancel();
+                } catch (error) { /* Ignore */ }
+                reader = null;
+            }
+
+            if (writer) {
+                try {
+                    await writer.close();
+                } catch (error) {
+                    console.error("Error closing writer:", error);
+                }
+                writer = null;
+            }
+
+            if (port) {
+                try {
+                    await port.close();
+                } catch (error) {
+                    console.error("Error closing port:", error);
+                }
+                port = null;
+            }
+
+            connected = false;
+            isSyncing = false;
+            updateConnectButton();
+            appendToCli('Serial port disconnected.');
+        }
+
+        async function listenToPort() {
+            const textDecoder = new TextDecoder();
+            
+            while (port.readable && keepReading) {
+                reader = port.readable.getReader();
+                try {
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done || !keepReading) break;
+                        const text = textDecoder.decode(value);
+                        handleIncomingData(text);
+                    }
+                } catch (error) {
+                    if (keepReading) {
+                        console.error('Error reading from port:', error);
+                        appendToCli(`Read error: ${error.message}`);
+                    }
+                } finally {
+                    reader.releaseLock();
+                }
+            }
+        }
+
+        async function sendSerialCommand(command) {
+            if (!writer) {
+                appendToCli('Not connected.');
+                return;
+            }
+            const textEncoder = new TextEncoder();
+            await writer.write(textEncoder.encode(command + '\r\n'));
+            appendToCli(`> ${command}`, false, true);
+        }
+
+        function updateConnectButton() {
+            if (connected) {
+                connectButton.innerHTML = '<i class="fas fa-times-circle mr-2"></i>Disconnect';
+                connectButton.classList.add('btn-danger');
+            } else {
+                connectButton.innerHTML = '<i class="fas fa-plug mr-2"></i>Connect';
+                connectButton.classList.remove('btn-danger');
+            }
+            syncFromFcBtn.disabled = !connected;
+        }
+
+        function handleIncomingData(text) {
+            appendToCli(text, true);
+
+            if (isSyncing && currentSyncCommand) {
+                syncOutputBuffer[currentSyncCommand] += text;
+
+                if (text.trim().endsWith('#')) {
+                    processNextCommandInQueue();
+                }
+            }
+        }
+
+        function appendToCli(text, isIncoming = false, isCommand = false) {
+            if (isIncoming) {
+                currentCliOutput += text;
+            }
+
+            if (isCommand) {
+                const span = document.createElement('span');
+                span.className = 'text-green-400';
+                span.textContent = text + '\n';
+                cliOutputEl.appendChild(span);
+            } else {
+                cliOutputEl.appendChild(document.createTextNode(text));
+            }
+            
+            if (isIncoming && text.trim().endsWith('#')) {
+                if (!cliOutputEl.querySelector('.cli-confirmation')) {
+                    const confirmation = document.createElement('div');
+                    confirmation.className = 'text-yellow-400';
+                    confirmation.textContent = '✅ Betaflight CLI connection confirmed.';
+                    cliOutputEl.appendChild(confirmation);
+                }
+            }
+
+            cliOutputEl.scrollTop = cliOutputEl.scrollHeight;
+        }
+
+        // --- Syncing and Parsing Logic ---
+        function startSync() {
+            if (!connected || !selectedProfileId || isSyncing) {
+                alert(isSyncing ? "Sync already in progress." : !connected ? "Connect to FC first." : "Select a profile first.");
+                return;
+            }
+
+            isSyncing = true;
+            syncFromFcBtn.disabled = true;
+            syncFromFcBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Syncing...';
+            
+            commandQueue = ['version', 'diff all', 'dump all'];
+            syncOutputBuffer = { 'version': '', 'diff all': '', 'dump all': '' };
+            
+            cliOutputEl.textContent = '';
+            processNextCommandInQueue();
+        }
+
+        async function processNextCommandInQueue() {
+            if (commandQueue.length > 0) {
+                currentSyncCommand = commandQueue.shift();
+                await sendSerialCommand(currentSyncCommand);
+            } else {
+                await finishSync();
+            }
+        }
+
+        async function parseDumpData(dumpText, versionText) {
+            const details = {
+                firmwareVersion: 'N/A',
+                boardName: 'N/A',
+                manufacturer: 'N/A',
+                mcu: 'N/A',
+                craftName: 'N/A',
+                escProtocol: 'N/A'
+            };
+
+            if (versionText) {
+                 const versionLines = versionText.split('\n');
+                 versionLines.forEach(line => {
+                    if (line.includes('Betaflight /')) {
+                        const mcuMatch = line.match(/Betaflight \/ (\S+)/);
+                        if (mcuMatch) details.mcu = mcuMatch[1];
+                    }
+                    if (line.includes('board_name')) {
+                        const boardMatch = line.match(/board_name: (\S+)/);
+                        if (boardMatch) details.boardName = boardMatch[1];
+                    }
+                    if (line.includes('manufacturer_id')) {
+                        const manMatch = line.match(/manufacturer_id: (\S+?)(,|$)/);
+                        if (manMatch) details.manufacturer = manMatch[1];
+                    }
+                 });
+            }
+
+            if (dumpText) {
+                const lines = dumpText.split('\n');
+                lines.forEach(line => {
+                    const trimmedLine = line.trim();
+                    if (!trimmedLine.startsWith('set ')) return;
+                    const parts = trimmedLine.substring(4).split(' = ');
+                    if (parts.length < 2) return;
+                    const key = parts[0].trim();
+                    const value = parts[1].trim();
+                    if (key === 'craft_name') details.craftName = value;
+                    if (key === 'motor_pwm_protocol') details.escProtocol = value;
+                });
+            }
+            
+            if (details.firmwareVersion === 'N/A' && dumpText) {
+                const versionMatch = dumpText.match(/# Betaflight \/.* (\d\.\d+\.\d+)/);
+                if (versionMatch) details.firmwareVersion = versionMatch[1];
+            }
+
+
+            return details;
+        }
+
+        async function finishSync() {
+            isSyncing = false;
+            currentSyncCommand = null;
+            syncFromFcBtn.disabled = false;
+            syncFromFcBtn.innerHTML = '<i class="fas fa-sync mr-2"></i>Sync from FC';
+
+            appendToCli("\n--- Sync Complete! ---\n", false, true);
+            
+            const fcDetails = await parseDumpData(syncOutputBuffer['dump all'], syncOutputBuffer['version']);
+            
+            const configs = {
+                version: syncOutputBuffer['version'],
+                diff: syncOutputBuffer['diff all'],
+                dump: syncOutputBuffer['dump all']
+            };
+
+            try {
+                const docRef = doc(db, getProfilesCollection().path, selectedProfileId);
+                await setDoc(docRef, { configs, fcDetails }, { merge: true });
+                appendToCli("✅ Configuration and details saved to profile.", false, true);
+            } catch (error) {
+                console.error("Error saving synced data:", error);
+                appendToCli(`❌ Error saving to profile: ${error.message}`, false, true);
+            }
+        }
+
+        // --- Profile Management (Firestore) ---
+        function getProfilesCollection() {
+            return collection(db, `users/${userId}/quadcopters`);
+        }
+
+        async function saveProfile(e) {
+            e.preventDefault();
+            const id = profileIdInput.value;
+            const name = quadNameInput.value;
+            const description = quadDescriptionInput.value;
+            const imageFile = quadImageInput.files[0];
+            let imageData = imageFile ? await toBase64(imageFile) : null;
+            const profileData = { name, description };
+
+            try {
+                const docRef = id ? doc(db, getProfilesCollection().path, id) : doc(collection(db, getProfilesCollection().path));
+                if (imageData) profileData.image = imageData;
+                await setDoc(docRef, profileData, { merge: true });
+                closeProfileModal();
+            } catch (error) {
+                console.error("Error saving profile: ", error);
+                alert("Failed to save profile.");
+            }
+        }
+        
+        async function deleteProfile() {
+            if (!selectedProfileId || !confirm('Are you sure?')) return;
+            try {
+                await deleteDoc(doc(db, getProfilesCollection().path, selectedProfileId));
+            } catch(error) {
+                console.error("Error deleting profile: ", error);
+                alert("Failed to delete profile.");
+            }
+        }
+
+        function renderProfiles() {
+            profilesListEl.innerHTML = profiles.length ? '' : '<p>No profiles yet.</p>';
+            profiles.forEach(profile => {
+                const div = document.createElement('div');
+                div.className = `p-3 rounded-md cursor-pointer border-2 border-transparent hover\:bg-gray-700`;
+                if (selectedProfileId === profile.id) {
+                    div.classList.add('border-indigo-500', 'bg-gray-700');
+                }
+                div.textContent = profile.name;
+                div.onclick = () => selectProfile(profile.id);
+                profilesListEl.appendChild(div);
+            });
+        }
+        
+        function selectProfile(id) {
+            selectedProfileId = id;
+            const profile = profiles.find(p => p.id === id);
+            if (profile) {
+                profileNameDisplay.textContent = profile.name;
+                profileDescriptionDisplay.textContent = profile.description || 'No description.';
+                profileImageDisplay.src = profile.image || 'https://placehold.co/400x300/1a202c/e2e8f0?text=No+Image';
+                
+                if (profile.fcDetails) {
+                    firmwareVersionDisplay.textContent = profile.fcDetails.firmwareVersion || 'N/A';
+                    boardNameDisplay.textContent = profile.fcDetails.boardName || 'N/A';
+                    manufacturerDisplay.textContent = profile.fcDetails.manufacturer || 'N/A';
+                    mcuDisplay.textContent = profile.fcDetails.mcu || 'N/A';
+                    craftNameDisplay.textContent = profile.fcDetails.craftName || 'N/A';
+                    escProtocolDisplay.textContent = profile.fcDetails.escProtocol || 'N/A';
+                } else {
+                    [firmwareVersionDisplay, boardNameDisplay, manufacturerDisplay, mcuDisplay, craftNameDisplay, escProtocolDisplay].forEach(el => el.textContent = 'N/A');
+                }
+
+                profileDetailsCard.classList.remove('hidden');
+                profileConfigCard.classList.remove('hidden');
+                displaySavedConfig('version');
+            } else {
+                 profileDetailsCard.classList.add('hidden');
+                 profileConfigCard.classList.add('hidden');
+            }
+            renderProfiles();
+        }
+        
+        function displaySavedConfig(type) {
+             const profile = profiles.find(p => p.id === selectedProfileId);
+             savedConfigOutputEl.textContent = (profile && profile.configs && profile.configs[type]) ? profile.configs[type] : `No '${type}' config saved.`;
+             document.querySelectorAll('.config-view-btn').forEach(btn => {
+                btn.classList.remove('btn-active-config', 'btn-secondary');
+                if (btn.dataset.configType === type) {
+                    btn.classList.add('btn-active-config');
+                } else {
+                    btn.classList.add('btn-secondary');
+                }
+             });
+        }
+
+        function openProfileModal(profile = null) {
+            profileForm.reset();
+            modalTitle.textContent = profile ? 'Edit Profile' : 'Add New Profile';
+            profileIdInput.value = profile ? profile.id : '';
+            quadNameInput.value = profile ? profile.name : '';
+            quadDescriptionInput.value = profile ? profile.description || '' : '';
+            profileModal.classList.remove('hidden');
+        }
+
+        function closeProfileModal() {
+            profileModal.classList.add('hidden');
+        }
+        
+        const toBase64 = file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+
+        async function initialize() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, user => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = `Local UserID: ${userId.substring(0,8)}...`;
+                        const profilesCollection = getProfilesCollection();
+                        onSnapshot(profilesCollection, (snapshot) => {
+                            const newProfiles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            const profileDeleted = selectedProfileId && !newProfiles.some(p => p.id === selectedProfileId);
+                            
+                            profiles = newProfiles;
+                            
+                            if (profileDeleted) {
+                                selectedProfileId = null;
+                            }
+                            
+                            renderProfiles();
+                            
+                            if (selectedProfileId) {
+                                selectProfile(selectedProfileId);
+                            } else {
+                                profileDetailsCard.classList.add('hidden');
+                                profileConfigCard.classList.add('hidden');
+                            }
+                        });
+                    } else {
+                        userId = null;
+                        userIdDisplay.textContent = 'Not authenticated';
+                    }
+                });
+
+                await signInAnonymously(auth);
+
+            } catch (error) {
+                console.error("Firebase initialization error:", error);
+                document.getElementById('app').innerHTML = `<div class="text-center text-red-400">Error: ${error.message}</div>`;
+            }
+        }
+
+        // --- Event Listeners ---
+        connectButton.addEventListener('click', connectSerial);
+        addProfileBtn.addEventListener('click', () => openProfileModal());
+        cancelModalBtn.addEventListener('click', closeProfileModal);
+        profileForm.addEventListener('submit', saveProfile);
+        editProfileBtn.addEventListener('click', () => {
+            const profile = profiles.find(p => p.id === selectedProfileId);
+            if(profile) openProfileModal(profile);
+        });
+        deleteProfileBtn.addEventListener('click', deleteProfile);
+        syncFromFcBtn.addEventListener('click', startSync);
+
+        document.querySelectorAll('[data-command]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentCliOutput = ""; 
+                cliOutputEl.textContent = "";
+                sendSerialCommand(btn.dataset.command);
+            });
+        });
+        
+        sendCliBtn.addEventListener('click', () => {
+            const command = cliInputEl.value.trim();
+            if(command) {
+                 sendSerialCommand(command);
+                 cliInputEl.value = '';
+            }
+        });
+
+        cliInputEl.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendCliBtn.click();
+        });
+        
+        document.querySelectorAll('.config-view-btn').forEach(btn => {
+            btn.addEventListener('click', () => displaySavedConfig(btn.dataset.configType));
+        });
+
+        window.addEventListener('load', initialize);
+
+    </script>
+</body>
+</html>
